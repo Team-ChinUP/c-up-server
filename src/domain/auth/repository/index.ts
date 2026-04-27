@@ -1,5 +1,5 @@
 import type { UserEntity } from "@/domain/auth/entity";
-import { prisma } from "@/global/lib/prisma";
+import { prisma } from "@/global/config/prisma";
 
 export const save = async (user: UserEntity): Promise<void> => {
 	await prisma.user.create({
