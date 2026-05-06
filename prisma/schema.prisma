@@ -12,6 +12,11 @@ enum Gender {
   FEMALE
 }
 
+enum SenderType {
+  USER
+  AI
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
@@ -24,7 +29,20 @@ model User {
 }
 
 model Room {
-  id     Int  @id @default(autoincrement())
-  userId Int  @unique
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       Int       @id @default(autoincrement())
+  userId   Int       @unique
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+}
+
+model Message {
+  id         Int        @id @default(autoincrement())
+  roomId     Int
+  senderType SenderType
+  message    String
+  createdAt  DateTime   @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
 }

@@ -1,5 +1,6 @@
 import type { VoiceFeatures } from "@/domain/chat/dto/request";
 import type { ChatSessionEntity } from "@/domain/chat/entity";
+import { SenderType } from "@prisma/client";
 import { prisma } from "@/global/config/prisma";
 
 const sessions = new Map<string, ChatSessionEntity>();
@@ -69,4 +70,41 @@ export const clearUserSessions = (userId: number): void => {
 			sessions.delete(key);
 		}
 	}
+};
+
+export type ConversationMessage = {
+	senderType: SenderType;
+	message: string;
+};
+
+export const saveMessage = async (
+	roomId: number,
+	senderType: SenderType,
+	message: string,
+): Promise<void> => {
+	await prisma.message.create({
+		data: {
+			roomId,
+			senderType,
+			message,
+		},
+	});
+};
+
+export const findRecentMessages = async (
+	roomId: number,
+	limit: number,
+): Promise<ConversationMessage[]> => {
+	const rows = await prisma.message.findMany({
+		where: { roomId },
+		orderBy: { createdAt: "desc" },
+		take: limit,
+		select: {
+			senderType: true,
+			message: true,
+		},
+	});
+
+	// 최신순으로 조회했기 때문에 프롬프트 주입 전 시간순으로 되돌린다.
+	return rows.reverse();
 };
