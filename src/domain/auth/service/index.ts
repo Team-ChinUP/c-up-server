@@ -2,9 +2,10 @@ import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:cry
 import { promisify } from "node:util";
 import jwt from "jsonwebtoken";
 import type { ReissueRequestDto, SigninRequestDto, SignupRequestDto } from "@/domain/auth/dto/request";
-import type { ReissueResponse, SigninResponse } from "@/domain/auth/dto/response";
+import type { MeResponse, ReissueResponse, SigninResponse } from "@/domain/auth/dto/response";
 import type { UserEntity } from "@/domain/auth/entity";
-import { findByEmail, save } from "@/domain/auth/repository";
+import { findByEmail, findOneByEmail, save } from "@/domain/auth/repository";
+import { extractBearerToken, verifyAccessToken } from "@/global/utils/auth-token";
 
 const scrypt = promisify(scryptCallback);
 const ACCESS_TOKEN_EXPIRES_IN = "30m";
@@ -13,6 +14,7 @@ const REFRESH_TOKEN_EXPIRES_IN = "14d";
 type TokenType = "access" | "refresh";
 
 type TokenPayload = {
+	userId: number;
 	email: string;
 	type: TokenType;
 };
@@ -29,22 +31,24 @@ const verifyToken = (token: string): TokenPayload => {
 		const email = decoded.email;
 		const type = decoded.type;
 
-		if (typeof email !== "string" || (type !== "access" && type !== "refresh")) {
+		const userId = decoded.userId;
+
+		if (typeof userId !== "number" || typeof email !== "string" || (type !== "access" && type !== "refresh")) {
 			throw new Error("토큰 payload가 올바르지 않습니다.");
 		}
 
-		return { email, type };
+		return { userId, email, type };
 	} catch {
 		throw new Error("유효하지 않거나 만료된 토큰입니다.");
 	}
 };
 
-const createTokenPair = (email: string): { accessToken: string; refreshToken: string } => {
-	const accessToken = jwt.sign({ email, type: "access" satisfies TokenType }, getTokenSecret(), {
+const createTokenPair = (userId: number, email: string): { accessToken: string; refreshToken: string } => {
+	const accessToken = jwt.sign({ userId, email, type: "access" satisfies TokenType }, getTokenSecret(), {
 		expiresIn: ACCESS_TOKEN_EXPIRES_IN,
 	});
 
-	const refreshToken = jwt.sign({ email, type: "refresh" satisfies TokenType }, getTokenSecret(), {
+	const refreshToken = jwt.sign({ userId, email, type: "refresh" satisfies TokenType }, getTokenSecret(), {
 		expiresIn: REFRESH_TOKEN_EXPIRES_IN,
 	});
 
@@ -108,15 +112,15 @@ export const signin = async (dto: SigninRequestDto): Promise<SigninResponse> => 
 		throw new Error("email과 password는 필수입니다.");
 	}
 
-	const exists = await findByEmail(normalizedEmail);
+	const user = await findOneByEmail(normalizedEmail);
 
-	if (!exists) {
+	if (!user) {
 		throw new Error("존재하지 않는 이메일입니다.");
 	}
     
 	await verifyPassword(normalizedPassword, await hashPassword(normalizedPassword));
 
-	const tokenPair = createTokenPair(normalizedEmail);
+	const tokenPair = createTokenPair(user.id, normalizedEmail);
 
 	return {
 		accessToekn: tokenPair.accessToken,
@@ -131,10 +135,21 @@ export const reissue = async (dto: ReissueRequestDto): Promise<ReissueResponse> 
 		throw new Error("리프레시 토큰이 아닙니다.");
 	}
 
-	const tokenPair = createTokenPair(payload.email);
+	const tokenPair = createTokenPair(payload.userId, payload.email);
 
 	return {
 		accessToken: tokenPair.accessToken,
 		refreshToken: tokenPair.refreshToken,
 	};
 };
+
+export const me = async (authorization?: string): Promise<MeResponse> => {
+	const token = extractBearerToken(authorization);
+	verifyAccessToken(token);
+
+	return {
+		authenticated: true,
+	};
+};
+
+export const logout = async (): Promise<void> => undefined;

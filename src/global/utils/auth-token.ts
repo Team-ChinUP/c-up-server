@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 
 export type AccessTokenPayload = {
+	userId: number;
 	email: string;
 	type: "access";
 };
@@ -29,14 +30,15 @@ export const verifyAccessToken = (token: string): AccessTokenPayload => {
 			throw new Error("유효하지 않은 토큰입니다.");
 		}
 
+		const userId = decoded.userId;
 		const email = decoded.email;
 		const type = decoded.type;
 
-		if (typeof email !== "string" || type !== "access") {
+		if (typeof userId !== "number" || typeof email !== "string" || type !== "access") {
 			throw new Error("액세스 토큰이 아닙니다.");
 		}
 
-		return { email, type };
+		return { userId, email, type };
 	} catch {
 		throw new Error("유효하지 않거나 만료된 토큰입니다.");
 	}

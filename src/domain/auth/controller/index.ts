@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { ReissueRequestDto, SigninRequestDto, SignupRequestDto } from "@/domain/auth/dto/request";
-import { reissue, signin, signup } from "@/domain/auth/service";
+import { logout, me, reissue, signin, signup } from "@/domain/auth/service";
 import { sendError } from "@/global/utils/error";
 import { sendResponse } from "@/global/utils/response";
 
@@ -33,6 +33,29 @@ export const reissueController = async (req: { body: ReissueRequestDto }, res: P
     }
 };
 
+export const meController = async (
+    req: { headers: { authorization?: string } },
+    res: Parameters<typeof sendResponse>[0],
+) => {
+    try {
+        const response = await me(req.headers.authorization);
+        return sendResponse(res, 200, response, "auth check success");
+    } catch (error) {
+        return sendError(res, 401, error);
+    }
+};
+
+export const logoutController = async (_req: unknown, res: Parameters<typeof sendResponse>[0]) => {
+    try {
+        await logout();
+        return sendResponse(res, 200, null, "로그아웃되었습니다.");
+    } catch (error) {
+        return sendError(res, 400, error);
+    }
+};
+
 authRouter.post("/sign-up", signupController);
 authRouter.post("/sign-in", signinController);
 authRouter.post("/reissue", reissueController);
+authRouter.get("/me", meController);
+authRouter.post("/logout", logoutController);

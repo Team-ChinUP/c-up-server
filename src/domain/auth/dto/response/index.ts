@@ -7,3 +7,7 @@ export type ReissueResponse = {
 	accessToken: string;
 	refreshToken: string;
 };
+
+export type MeResponse = {
+	authenticated: true;
+};
