@@ -2,6 +2,7 @@ import type {
   AudioChunkRequestDto,
   AudioEndRequestDto,
   JoinRoomRequestDto,
+  TextMessageRequestDto,
 } from "@/domain/chat/dto/request";
 import type {
   AIAudioChunkResponseDto,
@@ -70,7 +71,33 @@ const validateOwnership = async (
   const room = await findRoomByIdAndUserId(roomId, userId);
   if (!room) {
     throw new Error("접근할 수 없는 room입니다.");
-  }
+	}
+};
+
+const normalizeAudioMimeType = (mimeType?: string): string => {
+	const [type] = (mimeType ?? "audio/webm").split(";");
+	return type?.trim() || "audio/webm";
+};
+
+const getAudioFileName = (mimeType: string): string => {
+	switch (normalizeAudioMimeType(mimeType)) {
+		case "audio/wav":
+		case "audio/wave":
+		case "audio/x-wav":
+			return "audio.wav";
+		case "audio/mpeg":
+		case "audio/mp3":
+			return "audio.mp3";
+		case "audio/mp4":
+		case "audio/x-m4a":
+			return "audio.m4a";
+		case "audio/ogg":
+		case "audio/oga":
+			return "audio.ogg";
+		case "audio/webm":
+		default:
+			return "audio.webm";
+	}
 };
 
 export const joinRoom = async (
@@ -104,6 +131,7 @@ export const receiveAudioChunk = async (
     dto.roomId,
     dto.sequence,
     chunkData,
+    normalizeAudioMimeType(dto.mimeType),
     dto.voiceFeatures,
   );
 
@@ -120,14 +148,29 @@ export const finishAudioStream = async (
 ): Promise<AudioMergedResponseDto> => {
   await validateOwnership(userId, dto.roomId);
 
-  const { chunkCount, merged } = popMergedChunks(userId, dto.roomId);
+  const { chunkCount, merged, mimeType } = popMergedChunks(userId, dto.roomId);
 
   return {
     roomId: dto.roomId,
     chunkCount,
     totalBytes: merged.length,
     mergedAudioBase64: merged.toString("base64"),
+    mimeType,
   };
+};
+
+export const processTextMessage = async (
+  userId: number,
+  dto: TextMessageRequestDto,
+): Promise<string> => {
+  await validateOwnership(userId, dto.roomId);
+
+  const text = dto.text.trim();
+  if (!text) {
+    throw new Error("메시지를 입력해주세요.");
+  }
+
+  return text;
 };
 
 export const cleanupChatSession = (userId: number): void => {
@@ -136,10 +179,14 @@ export const cleanupChatSession = (userId: number): void => {
 
 export const transcribeAudio = async (
   audioBuffer: Buffer,
+  mimeType: string = "audio/webm",
   language: string = "ko",
 ): Promise<string> => {
   const uint8Array = new Uint8Array(audioBuffer);
-  const file = new File([uint8Array], "audio.wav", { type: "audio/wav" });
+  const normalizedMimeType = normalizeAudioMimeType(mimeType);
+  const file = new File([uint8Array], getAudioFileName(normalizedMimeType), {
+    type: normalizedMimeType,
+  });
 
   const transcription = await openai.audio.transcriptions.create({
     file,

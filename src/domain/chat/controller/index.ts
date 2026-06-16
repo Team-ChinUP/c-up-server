@@ -1,5 +1,10 @@
 import type { Server, Socket } from "socket.io";
-import type { AudioChunkRequestDto, AudioEndRequestDto, JoinRoomRequestDto } from "@/domain/chat/dto/request";
+import type {
+	AudioChunkRequestDto,
+	AudioEndRequestDto,
+	JoinRoomRequestDto,
+	TextMessageRequestDto,
+} from "@/domain/chat/dto/request";
 import type {
 	AIAudioChunkResponseDto,
 	EmotionStreamResponseDto,
@@ -14,6 +19,7 @@ import {
 	buildEmotionScores,
 	generateAIResponse,
 	joinRoom,
+	processTextMessage,
 	receiveAudioChunk,
 	transcribeAudio,
 } from "@/domain/chat/service";
@@ -22,6 +28,7 @@ type ClientToServerEvents = {
 	"chat:room:join": (payload: JoinRoomRequestDto) => void;
 	"chat:audio:chunk": (payload: AudioChunkRequestDto) => void;
 	"chat:audio:end": (payload: AudioEndRequestDto) => void;
+	"chat:text:send": (payload: TextMessageRequestDto) => void;
 };
 
 type ServerToClientEvents = {
@@ -74,7 +81,7 @@ export const registerChatSocketHandlers = (io: ChatIo): void => {
 
 				// STT
 				const mergedBuffer = Buffer.from(mergedResponse.mergedAudioBase64, "base64");
-				const userText = await transcribeAudio(mergedBuffer);
+				const userText = await transcribeAudio(mergedBuffer, mergedResponse.mimeType);
 
 				// 텍스트 스트리밍 전에 감정 데이터를 먼저 보낸다.
 				const emotion = buildEmotionScores(userText);
@@ -84,6 +91,33 @@ export const registerChatSocketHandlers = (io: ChatIo): void => {
 				});
 
 				// 최근 대화 문맥(최대 10개)을 포함해 GPT 응답을 스트리밍한다.
+				const aiText = await generateAIResponse(
+					payload.roomId,
+					userText,
+					(textChunk) => {
+						socket.emit("chat:ai:text:chunk", textChunk);
+					},
+					(audioChunk) => {
+						socket.emit("chat:ai:audio:chunk", audioChunk);
+					},
+				);
+
+				void aiText;
+			} catch (error) {
+				emitChatError(socket, error);
+			}
+		});
+
+		socket.on("chat:text:send", async (payload: TextMessageRequestDto) => {
+			try {
+				const userText = await processTextMessage(socket.data.userId, payload);
+
+				const emotion = buildEmotionScores(userText);
+				socket.emit("chat:emotion:stream", {
+					...emotion,
+					roomId: payload.roomId,
+				});
+
 				const aiText = await generateAIResponse(
 					payload.roomId,
 					userText,

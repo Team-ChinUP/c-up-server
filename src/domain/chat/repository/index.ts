@@ -40,17 +40,18 @@ export const appendChunk = (
 	roomId: number,
 	sequence: number,
 	data: Buffer,
+	mimeType: string,
 	voiceFeatures: VoiceFeatures,
 ): number => {
 	const session = getOrCreateSession(userId, roomId);
-	session.chunks.push({ sequence, data, voiceFeatures });
+	session.chunks.push({ sequence, data, mimeType, voiceFeatures });
 	return session.chunks.length;
 };
 
 export const popMergedChunks = (
 	userId: number,
 	roomId: number,
-): { chunkCount: number; merged: Buffer } => {
+): { chunkCount: number; merged: Buffer; mimeType: string } => {
 	const session = getOrCreateSession(userId, roomId);
 	if (session.chunks.length === 0) {
 		throw new Error("수집된 음성 chunk가 없습니다.");
@@ -58,10 +59,11 @@ export const popMergedChunks = (
 
 	const sorted = [...session.chunks].sort((a, b) => a.sequence - b.sequence);
 	const merged = Buffer.concat(sorted.map((chunk) => chunk.data));
+	const mimeType = sorted[0]?.mimeType ?? "audio/webm";
 	const chunkCount = sorted.length;
 	session.chunks = [];
 
-	return { chunkCount, merged };
+	return { chunkCount, merged, mimeType };
 };
 
 export const clearUserSessions = (userId: number): void => {

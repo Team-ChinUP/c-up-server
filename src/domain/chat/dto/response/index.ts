@@ -13,6 +13,7 @@ export type AudioMergedResponseDto = {
 	chunkCount: number;
 	totalBytes: number;
 	mergedAudioBase64: string;
+	mimeType: string;
 };
 
 export type EmotionStreamResponseDto = {
