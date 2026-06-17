@@ -24,41 +24,118 @@ import character from "@/global/utils/character.json";
 import { openai } from "@/global/config/openai";
 import { SenderType } from "@prisma/client";
 
-const buildSystemPromptFromCharacter = (): string => {
-  const core = [
-    `너는 ${character.role} '${character.name}'다.`,
-    ...character.personality.traits,
-    ...character.personality.attitude,
-  ].map((line) => `- ${line}`);
+export type CharacterExample = {
+  user: string;
+  assistant: string;
+};
 
-  const speech = [
-    ...character.speech_style.language,
-    ...character.speech_style.tone,
-    ...character.signature_phrases.map((phrase) => `자주 쓰는 표현: ${phrase}`),
-  ].map((line) => `- ${line}`);
+export type CharacterConfig = {
+  name: string;
+  identity: {
+    role: string;
+    archetype: string;
+    mission: string;
+    goal: string;
+  };
+  core_beliefs: string[];
+  behavior_rules: string[];
+  speech_rules: {
+    tone: string[];
+    allowed_english: string[];
+    forbidden: string[];
+    max_response_length: number;
+  };
+  response_algorithm: string[];
+  response_constraints: string[];
+  signature_phrases: string[];
+  examples: CharacterExample[];
+};
 
-  const rules = [
-    ...character.speech_style.avoid.map((item) => `금지: ${item}`),
-    ...character.conversation_style.rules,
-  ].map((line) => `- ${line}`);
+const characterConfig = character as CharacterConfig;
 
-  const examples = character.examples.map(
-    (example, index) =>
-      `- 예시${index + 1} | 사용자: ${example.user} | ${character.name}: ${example.assistant}`,
-  );
+const toBulletList = (items: string[]): string =>
+  items.map((item) => `- ${item}`).join("\n");
+
+const toNumberedList = (items: string[]): string =>
+  items.map((item, index) => `${index + 1}. ${item}`).join("\n");
+
+const toExampleList = (examples: CharacterExample[]): string =>
+  examples
+    .map(
+      (example, index) => [
+        `Example ${index + 1}`,
+        `User: ${example.user}`,
+        `Assistant: ${example.assistant}`,
+      ].join("\n"),
+    )
+    .join("\n\n");
+
+export const buildSystemPromptFromCharacter = (): string => {
+  const { name, identity, speech_rules } = characterConfig;
 
   const systemPrompt = `
-# Core
-${core.join("\n")}
+# Highest Priority
 
-# Speech
-${speech.join("\n")}
+You are ${name}. Stay in character for every answer.
+Your final answer must be ${speech_rules.max_response_length} Korean characters or fewer unless the user is in danger.
+If rules conflict, follow this priority: safety > response_constraints > behavior_rules > speech_rules > signature_phrases.
 
-# Rules
-${rules.join("\n")}
+# Identity
 
-# Example
-${examples.join("\n")}
+Name:
+${name}
+
+Role:
+${identity.role}
+
+Archetype:
+${identity.archetype}
+
+Mission:
+${identity.mission}
+
+Goal:
+${identity.goal}
+
+# Core Beliefs
+
+${toBulletList(characterConfig.core_beliefs)}
+
+# Behavior Rules
+
+${toBulletList(characterConfig.behavior_rules)}
+
+# Speech Rules
+
+Tone:
+${toBulletList(speech_rules.tone)}
+
+Allowed English:
+${toBulletList(speech_rules.allowed_english)}
+
+Forbidden:
+${toBulletList(speech_rules.forbidden)}
+
+Max Response Length:
+- ${speech_rules.max_response_length} Korean characters or fewer.
+- Prefer one sentence.
+- Cut explanations before exceeding the limit.
+
+# Response Algorithm
+
+${toNumberedList(characterConfig.response_algorithm)}
+
+# Constraints
+
+${toBulletList(characterConfig.response_constraints)}
+
+# Signature Phrases
+
+${toBulletList(characterConfig.signature_phrases)}
+
+# Example Conversations
+
+${toExampleList(characterConfig.examples)}
 `;
 
   return systemPrompt.trim();
@@ -256,7 +333,7 @@ export const generateAIResponse = async (
     messages,
     stream: true,
     temperature: 0.8,
-    max_tokens: 300,
+    max_tokens: 80,
   });
 
   let fullText = "";
