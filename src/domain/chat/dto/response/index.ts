@@ -19,9 +19,38 @@ export type AudioMergedResponseDto = {
 export type EmotionStreamResponseDto = {
 	roomId: number;
 	happy: number;
-	sad: number;
 	angry: number;
-	joy: number;
+};
+
+export type TTSViseme = 0 | 1 | 2 | 3 | 4 | 5;
+
+export type TTSWordTimestamp = {
+	word: string;
+	startMs: number;
+	endMs: number;
+};
+
+export type TTSPhonemeTimestamp = {
+	text: string;
+	phoneme: string;
+	startMs: number;
+	endMs: number;
+};
+
+export type TTSVisemeTimestamp = {
+	text: string;
+	viseme: TTSViseme;
+	startMs: number;
+	endMs: number;
+};
+
+export type TTSAudioAlignment = {
+	text: string;
+	durationMs: number;
+	words: TTSWordTimestamp[];
+	phonemes: TTSPhonemeTimestamp[];
+	visemes: TTSVisemeTimestamp[];
+	source: "estimated";
 };
 
 export type AIAudioChunkResponseDto = {
@@ -29,6 +58,7 @@ export type AIAudioChunkResponseDto = {
 	sequence: number;
 	chunkBase64: string;
 	isComplete: boolean;
+	alignment?: TTSAudioAlignment;
 };
 
 export type AITextChunkResponseDto = {

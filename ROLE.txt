@@ -1,0 +1,27 @@
+서비스
+- 실시간 AI 캐릭터 대화 서비스
+
+서비스 흐름
+사용자 회원가입 -> 사용자 로그인 -> 채팅방 생성 -> 채팅방 접속 -> 마이크 클릭 -> 음성 chunk(오디오 조각)와 음성 특징을 서버로 보냄 -> 클라이언트에서 말을 하지 않으면 3초 후 음성 끝났다는 정보를 서버로 보냄 -> 서버에서 이때까지 받은 음성 chunk를 합치기 -> stt로 최종 음성의 text 추출 -> text와 음성 특징을 합쳐 OpenAI API한테 전달 -> AI 캐릭터 감정 데이터 + 음성 데이터 실시간 반환 -> 클라이언트에서 실시간으로 음성 데이터 실행 및 감정 데이터를 활용한 애니메이션 실행
+
+서비스 아키텍쳐 구조
+- domain
+  - [기능 단위]
+    - controller
+      api 요청을 받고 응답을 반환하는 계층, 비즈니스 로직 X, service의 함수를 호출하여 응답을 반환
+    - service 
+      repository에서 데이터를 받고 controller로 응답을 반환하는 계층, 비즈니스 로직 O, repository의 함수를 호출하여 DB 값을 가져오 후 편집하여 controller로 반환
+    - repository
+      db에 집접적으로 접근하는 계층, db에 접근해 저장, 수정, 삭제, 읽기 작업을 수행함, service의 호출을 받아 db에 접근해 데이터 작업을 함
+    - dto
+      - request
+        클라이언트가 api를 호출할 떄 같이 줘야하는 데이터의 type을 정의하는 폴더, controller, service 계층에서 사용, controller 계층에서 serviece 계층으로 request dto를 넘긴 후 service에서 이를 분해하여 사용
+      - response
+        서버에서 클라이언트로 응답을 보낼때 그 응답의 type을 정의하는 폴더, controller, service 계층에서 사용, service 계층에서 response를 만든 후 이를 controller로 반환, controller는 이 응답 데이터를 클라이언트에게 반환
+    - entity
+      db에 저장할 data의 type을 정의하는 폴더
+- global
+  - config
+    외부 라이브러리를 설정한 파일이 모여있는 폴더
+  - utils
+    전역적으로 쓰이는 함수를 모아둔 폴더

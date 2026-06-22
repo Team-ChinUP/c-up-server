@@ -22,7 +22,19 @@ import {
 } from "@/domain/chat/repository";
 import character from "@/global/utils/character.json";
 import { openai } from "@/global/config/openai";
+import { buildEstimatedAudioAlignment } from "@/domain/chat/utils/audio-alignment";
 import { SenderType } from "@prisma/client";
+
+const SPEECH_CHUNK_MAX_LENGTH = 24;
+const SPEECH_SPEED = 1.65;
+const CUSTOM_TTS_INSTRUCTIONS = [
+  "Speak Korean with a loud, projected, almost shouting energy, like an intense coach calling out from across a room.",
+  "Use a noticeable non-native Korean accent while keeping every word understandable.",
+  "Make consonants a little harder and vowels slightly uneven, as if Korean is not the speaker's first language.",
+  "Keep the tone confident, forceful, and playful rather than angry or mocking.",
+  "Do not imitate or mock any specific nationality, ethnicity, or real person.",
+  "Avoid slow dramatic pauses; keep the delivery brisk and punchy.",
+].join(" ");
 
 export type CharacterExample = {
   user: string;
@@ -280,25 +292,19 @@ export const buildEmotionScores = (
   const loweredText = userText.toLowerCase();
 
   const happyKeywords = ["행복", "기뻐", "좋아", "만족", "웃"];
-  const sadKeywords = ["슬프", "우울", "눈물", "허전", "서운", "힘들"];
   const angryKeywords = ["화나", "짜증", "분노", "열받", "억울"];
-  const joyKeywords = ["신나", "즐거", "설레", "흥분", "환호"];
 
   const countMatches = (keywords: string[]): number =>
     keywords.filter((keyword) => loweredText.includes(keyword)).length;
 
   const happy = 1 + countMatches(happyKeywords) * 2;
-  const sad = 1 + countMatches(sadKeywords) * 2;
   const angry = 1 + countMatches(angryKeywords) * 2;
-  const joy = 1 + countMatches(joyKeywords) * 2;
-  const total = happy + sad + angry + joy;
+  const total = happy + angry;
 
   return {
     roomId: 0,
     happy: Number((happy / total).toFixed(2)),
-    sad: Number((sad / total).toFixed(2)),
     angry: Number((angry / total).toFixed(2)),
-    joy: Number((joy / total).toFixed(2)),
   };
 };
 
@@ -353,17 +359,24 @@ export const generateAIResponse = async (
     const task = openai.audio.speech
       .create({
         model: "gpt-4o-mini-tts",
-        voice: "alloy",
+        voice: "ash",
         input: trimmedText,
+        instructions: CUSTOM_TTS_INSTRUCTIONS,
         response_format: "mp3",
+        speed: SPEECH_SPEED,
       })
       .then(async (speech) => {
         const audioBuffer = Buffer.from(await speech.arrayBuffer());
+        const alignment = buildEstimatedAudioAlignment(
+          trimmedText,
+          SPEECH_SPEED,
+        );
         onAudioChunk({
           roomId,
           sequence: currentSequence,
           chunkBase64: audioBuffer.toString("base64"),
           isComplete: false,
+          alignment,
         });
       })
       .catch(() => {
@@ -385,7 +398,7 @@ export const generateAIResponse = async (
         isComplete: false,
       });
 
-      if (/[.!?。！？\n]/.test(delta) || pendingSpeechText.length >= 50) {
+      if (/[.!?。！？,\n]/.test(delta) || pendingSpeechText.length >= SPEECH_CHUNK_MAX_LENGTH) {
         const speechText = pendingSpeechText;
         pendingSpeechText = "";
         flushSpeechChunk(speechText);
@@ -438,10 +451,12 @@ export const streamTextToSpeech = async (
   }
 
   const speech = await openai.audio.speech.create({
-    model: "tts-1",
-    voice: "alloy",
+    model: "gpt-4o-mini-tts",
+    voice: "ash",
     input: text,
+    instructions: CUSTOM_TTS_INSTRUCTIONS,
     response_format: "mp3",
+    speed: SPEECH_SPEED,
   });
 
   const reader = speech.body?.getReader();
